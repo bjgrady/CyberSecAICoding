@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Gold Collection Game</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: black;
+        }
+        #gameContainer {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            background-image: url('https://raw.githubusercontent.com/clash-of-clans/wallpapers/main/clash-of-clans-goblin-wallpaper-1920x1080.jpg');
+            background-size: cover;
+            background-position: center;
+        }
+        #basket {
+            position: absolute;
+            width: 80px;
+            height: 60px;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+        .gold {
+            position: absolute;
+            pointer-events: none;
+        }
+        #scoreboard {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: white;
+            font-family: Arial, sans-serif;
+            font-size: 20px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+        }
+        .collect-effect {
+            position: absolute;
+            font-size: 24px;
+            color: gold;
+            animation: floatUp 0.5s ease-out forwards;
+            pointer-events: none;
+        }
+        @keyframes floatUp {
+            0% {
+                transform: translateY(0);
+                opacity: 1;
+            }
+            100% {
+                transform: translateY(-50px);
+                opacity: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <div id="scoreboard">
+            Score: <span id="score">0</span><br>
+            Time: <span id="timer">60</span>
+        </div>
+        <img id="basket" src="Basket.png" alt="Basket">
+    </div>
+
+    <audio id="collectSound" preload="auto">
+        <source src="collect.mp3" type="audio/mp3">
+    </audio>
+
+    <script>
+        const gameContainer = document.getElementById('gameContainer');
+        const basket = document.getElementById('basket');
+        const scoreElement = document.getElementById('score');
+        const timerElement = document.getElementById('timer');
+        const collectSound = document.getElementById('collectSound');
+
+        let score = 0;
+        let timeLeft = 60;
+        let gameRunning = true;
+        let keys = {};
+
+        // Basket movement speed and boundaries
+        const BASKET_SPEED = 5;
+        const BASKET_BOUNDS = {
+            left: 0,
+            right: gameContainer.clientWidth - basket.clientWidth,
+            top: 0,
+            bottom: gameContainer.clientHeight - basket.clientHeight
+        };
+
+        // Handle key events
+        window.addEventListener('keydown', (e) => {
+            keys[e.key] = true;
+        });
+
+        window.addEventListener('keyup', (e) => {
+            keys[e.key] = false;
+        });
+
+        // Move basket based on key states
+        function moveBasket() {
+            if (!gameRunning) return;
+
+            let x = parseInt(basket.style.left || '50') ;
+            let y = parseInt(basket.style.top || (BASKET_BOUNDS.bottom + 'px'));
+
+            if (keys['ArrowLeft']) x -= BASKET_SPEED;
+            if (keys['ArrowRight']) x += BASKET_SPEED;
+            if (keys['ArrowUp']) y -= BASKET_SPEED;
+            if (keys['ArrowDown']) y += BASKET_SPEED;
+
+            // Apply boundaries
+            x = Math.max(BASKET_BOUNDS.left, Math.min(x, BASKET_BOUNDS.right));
+            y = Math.max(BASKET_BOUNDS.top, Math.min(y, BASKET_BOUNDS.bottom));
+
+            basket.style.left = x + 'px';
+            basket.style.top = y + 'px';
+        }
+
+        // Create falling gold
+        function createGold() {
+            if (!gameRunning) return;
+
+            const gold = document.createElement('img');
+            gold.src = 'GoldStar.png';
+            gold.className = 'gold';
+
+            // Random size between 20 and 50 pixels
+            const size = Math.random() * 30 + 20;
+            gold.style.width = size + 'px';
+            gold.style.height = size + 'px';
+
+            // Random starting position
+            gold.style.left = Math.random() * (gameContainer.clientWidth - size) + 'px';
+            gold.style.top = '-50px';
+
+            gameContainer.appendChild(gold);
+
+            // Falling animation
+            let posY = -50;
+            const speed = 2 + Math.random() * 2;
+
+            function fall() {
+                if (!gameRunning) {
+                    gameContainer.removeChild(gold);
+                    return;
+                }
+
+                posY += speed;
+                gold.style.top = posY + 'px';
+
+                // Check collision with basket
+                const goldRect = gold.getBoundingClientRect();
+                const basketRect = basket.getBoundingClientRect();
+
+                if (checkCollision(goldRect, basketRect)) {
+                    // Calculate points based on size (smaller gold = more points)
+                    const points = Math.round(50 - size + 20);
+                    score += points;
+                    scoreElement.textContent = score;
+
+                    // Play sound effect
+                    collectSound.currentTime = 0;
+                    collectSound.play();
+
+                    // Create collection effect
+                    createCollectEffect(goldRect.left, goldRect.top, '+' + points);
+
+                    gameContainer.removeChild(gold);
+                    return;
+                }
+
+                // Remove if fallen below screen
+                if (posY > gameContainer.clientHeight) {
+                    gameContainer.removeChild(gold);
+                    return;
+                }
+
+                requestAnimationFrame(fall);
+            }
+
+            fall();
+        }
+
+        // Create visual effect when collecting gold
+        function createCollectEffect(x, y, text) {
+            const effect = document.createElement('div');
+            effect.className = 'collect-effect';
+            effect.textContent = text;
+            effect.style.left = x + 'px';
+            effect.style.top = y + 'px';
+            gameContainer.appendChild(effect);
+
+            setTimeout(() => {
+                gameContainer.removeChild(effect);
+            }, 500);
+        }
+
+        // Collision detection
+        function checkCollision(rect1, rect2) {
+            return !(rect1.right < rect2.left || 
+                    rect1.left > rect2.right || 
+                    rect1.bottom < rect2.top || 
+                    rect1.top > rect2.bottom);
+        }
+
+        // Game timer
+        function updateTimer() {
+            if (!gameRunning) return;
+
+            timeLeft--;
+            timerElement.textContent = timeLeft;
+
+            if (timeLeft <= 0) {
+                gameRunning = false;
+                alert('Game Over! Final Score: ' + score);
+                return;
+            }
+
+            setTimeout(updateTimer, 1000);
+        }
+
+        // Game loop
+        function gameLoop() {
+            moveBasket();
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Initialize game
+        function initGame() {
+            // Set initial basket position
+            basket.style.left = '50%';
+            basket.style.top = (BASKET_BOUNDS.bottom) + 'px';
+
+            // Start creating gold pieces
+            setInterval(createGold, 1000);
+
+            // Start the game loop
+            gameLoop();
+            updateTimer();
+        }
+
+        // Start the game when page loads
+        window.onload = initGame;
+    </script>
+</body>
+</html>
